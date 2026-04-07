@@ -16,31 +16,26 @@ MODEL_PATH = BASE_DIR / "model" / "model.pkl"
 with open(MODEL_PATH, "rb") as f:
     saved = pickle.load(f)
 
-model       = saved["model"]
-HERO_LIST   = saved["heroes"]       # список героев в том же порядке, что при обучении
-feature_cols= saved["features"]     # список колонок: [adv_Abrams, adv_Bebop, ..., size_diff]
-scaler      = saved["scaler"]       # None если не нужен
-needs_scale = saved["needs_scale"]  # True только для Logistic Regression
+model        = saved["model"]
+HERO_LIST    = saved["heroes"]    # порядок героев как при обучении
+feature_cols = saved["features"]  # ['adv_Abrams', 'adv_Bebop', ..., 'size_diff']
+scaler       = saved["scaler"]    # None если не LogisticRegression
+needs_scale  = saved["needs_scale"]
 
 
 def build_features(candidate_hero: str, my: list, enemy: list) -> pd.DataFrame:
     """
-    Строит вектор фич для одного кандидата-героя.
-    candidate_hero добавляется в команду 'my' (мы его пикаем).
-    Фичи: adv_{h} = team_h - enemy_h, size_diff = len(team) - len(enemy)
+    Строит adv_-фичи для кандидата.
+    Модель обучалась на: adv_{h} = team_{h} - enemy_{h}, size_diff.
+    Кандидат считается уже добавленным в my.
     """
-    team   = list(my) + [candidate_hero]
-    enemy_ = list(enemy)
+    team = list(my) + [candidate_hero]
 
     row = {}
     for h in HERO_LIST:
-        t = 1.0 if h in team   else 0.0
-        e = 1.0 if h in enemy_ else 0.0
-        row[f"adv_{h}"] = t - e
+        row[f"adv_{h}"] = (1.0 if h in team else 0.0) - (1.0 if h in enemy else 0.0)
+    row["size_diff"] = float(len(team) - len(enemy))
 
-    row["size_diff"] = float(len(team) - len(enemy_))
-
-    # Возвращаем DataFrame с колонками в правильном порядке
     return pd.DataFrame([row])[feature_cols]
 
 
@@ -51,11 +46,11 @@ def index():
 
 @app.route("/counterpick", methods=["POST"])
 def counterpick():
-    data    = request.json
-    my      = data.get("my_heroes", [])
-    enemy   = data.get("enemy_heroes", [])
-    banned  = set(data.get("banned", []))
-    used    = set(my) | set(enemy) | banned
+    data   = request.json
+    my     = data.get("my_heroes", [])
+    enemy  = data.get("enemy_heroes", [])
+    banned = set(data.get("banned", []))
+    used   = set(my) | set(enemy) | banned
 
     results = []
 
@@ -69,32 +64,25 @@ def counterpick():
             X_row = scaler.transform(X_row)
 
         prob = float(model.predict_proba(X_row)[0][1])
-
-        results.append({
-            "hero": hero,
-            "win_prob": round(prob, 4)
-        })
+        results.append({"hero": hero, "win_prob": round(prob, 4)})
 
     results.sort(key=lambda x: x["win_prob"], reverse=True)
-
     return jsonify({"recommendations": results})
 
 
 @app.route("/predict", methods=["POST"])
 def predict():
     """
-    Прямой предикт по конкретным командам.
+    Прямой предикт по готовым командам.
     Тело: { "my_heroes": [...], "enemy_heroes": [...] }
     """
-    data   = request.json
-    my     = data.get("my_heroes", [])
-    enemy  = data.get("enemy_heroes", [])
+    data  = request.json
+    my    = data.get("my_heroes", [])
+    enemy = data.get("enemy_heroes", [])
 
     row = {}
     for h in HERO_LIST:
-        t = 1.0 if h in my    else 0.0
-        e = 1.0 if h in enemy else 0.0
-        row[f"adv_{h}"] = t - e
+        row[f"adv_{h}"] = (1.0 if h in my else 0.0) - (1.0 if h in enemy else 0.0)
     row["size_diff"] = float(len(my) - len(enemy))
 
     X_row = pd.DataFrame([row])[feature_cols]
