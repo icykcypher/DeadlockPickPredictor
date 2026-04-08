@@ -1,34 +1,55 @@
-from pathlib import Path
-from flask import Flask, request, jsonify
+import sys
+import json
+import webbrowser
 import pickle
 import pandas as pd
+from pathlib import Path
+from flask import Flask, request, jsonify
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(sys.executable).resolve().parent
+    MEIPASS  = Path(sys._MEIPASS)
+else:
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    MEIPASS  = None
 
-app = Flask(
-    __name__,
-    static_folder=str(BASE_DIR / "frontend"),
-    static_url_path=""
-)
+CONFIG_PATH = BASE_DIR / "config.json"
 
-MODEL_PATH = BASE_DIR / "model" / "model.pkl"
+if not CONFIG_PATH.exists():
+    print(f"[WARN] config.json was not fount {CONFIG_PATH}, using default value")
+    config = {}
+else:
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        config = json.load(f)
+
+HOST = config.get("host", "0.0.0.0")
+PORT = config.get("port", 5000)
+OPEN_BROWSER = config.get("open_browser", True)
+
+if MEIPASS is not None:
+    FRONTEND_DIR = MEIPASS / config.get("frontend_dir", "frontend")
+    MODEL_PATH = MEIPASS / config.get("model_path",   "model/model.pkl")
+else:
+    FRONTEND_DIR = (BASE_DIR / config.get("frontend_dir", "frontend")).resolve()
+    MODEL_PATH = (BASE_DIR / config.get("model_path",   "model/model.pkl")).resolve()
+
+print(f"[INFO] frontend : {FRONTEND_DIR}")
+print(f"[INFO] model    : {MODEL_PATH}")
+print(f"[INFO] server   : http://{HOST}:{PORT}")
+
+app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path="")
 
 with open(MODEL_PATH, "rb") as f:
     saved = pickle.load(f)
 
-model        = saved["model"]
-HERO_LIST    = saved["heroes"]    # порядок героев как при обучении
-feature_cols = saved["features"]  # ['adv_Abrams', 'adv_Bebop', ..., 'size_diff']
-scaler       = saved["scaler"]    # None если не LogisticRegression
-needs_scale  = saved["needs_scale"]
+model = saved["model"]
+HERO_LIST = saved["heroes"]   
+feature_cols = saved["features"]
+scaler = saved["scaler"]    
+needs_scale = saved["needs_scale"]
 
 
 def build_features(candidate_hero: str, my: list, enemy: list) -> pd.DataFrame:
-    """
-    Строит adv_-фичи для кандидата.
-    Модель обучалась на: adv_{h} = team_{h} - enemy_{h}, size_diff.
-    Кандидат считается уже добавленным в my.
-    """
     team = list(my) + [candidate_hero]
 
     row = {}
@@ -53,7 +74,6 @@ def counterpick():
     used   = set(my) | set(enemy) | banned
 
     results = []
-
     for hero in HERO_LIST:
         if hero in used:
             continue
@@ -72,10 +92,6 @@ def counterpick():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    """
-    Прямой предикт по готовым командам.
-    Тело: { "my_heroes": [...], "enemy_heroes": [...] }
-    """
     data  = request.json
     my    = data.get("my_heroes", [])
     enemy = data.get("enemy_heroes", [])
@@ -101,4 +117,6 @@ def predict():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    if OPEN_BROWSER:
+        webbrowser.open(f"http://localhost:{PORT}")
+    app.run(host=HOST, port=PORT, debug=False)

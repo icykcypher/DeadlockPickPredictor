@@ -164,10 +164,6 @@ body,html{background:#1a1610;}
 </div>
 
 <script>
-// ============================================================
-// ПАТЧ: интеграция с /counterpick
-// Вставь этот код ВМЕСТО существующего скрипта
-// ============================================================
 
 const HEROES=['Abrams','Bebop','Calico','Dynamo','Fathom','GreyTalon','Haze','Holliday','Infernus','Ivy','Kelvin','LadyGeist','Lash','McGinnis','Mirage','MoKrill','Paradox','Pocket','Seven','Shiv','Sinclair','Vindicta','Viscous','Vyper','Warden','Wraith','Yamato'];
 const ROLES={Abrams:'Tank',Bebop:'Support',Dynamo:'Support',Fantom:'Carry',GreyTalon:'Carry',Haze:'Carry',Holliday:'Carry',Infernus:'Carry',Ivy:'Support',Kelvin:'Support',LadyGeist:'Carry',Lash:'Tank',McGinnis:'Tank',Mirage:'Flex',MoKrill:'Support',Paradox:'Flex',Pocket:'Flex',Seven:'Flex',Shiv:'Carry',Silver:'Carry',Sinclair:'Support',Vindicta:'Carry',Viscous:'Tank',Vyper:'Flex',Warden:'Tank',Wraith:'Carry',Yamato:'Tank'};
@@ -191,14 +187,11 @@ let state={
   roundTimer: 30,
   timerActive: true,
   interval: null,
-  // --- НОВОЕ ---
-  cpMap: {},          // { heroName: win_prob }
-  cpActive: false,    // true после первого правого пика
-  cpLoading: false,   // анимация загрузки
+  cpMap: {},          
+  cpActive: false,   
+  cpLoading: false,   
 };
 
-// ---- ОПРЕДЕЛЕНИЕ "первого правого пика" ----
-// Первый R+P в SEQUENCE — индекс 3
 const FIRST_RIGHT_PICK_IDX = SEQUENCE.findIndex(s => s.side === 'R' && s.type === 'P');
 
 function leftSlots(){return state.slots.filter(s=>s.side==='L');}
@@ -221,13 +214,10 @@ function confirmPick(){
   state.currentStep++;
   state.roundTimer=30;
 
-  // ---- Активируем обновление после первого правого пика ----
-  // justDone — только что заполненный слот
   if(justDone === FIRST_RIGHT_PICK_IDX){
     state.cpActive = true;
   }
 
-  // Если cpActive — запрашиваем стату после каждого действия
   if(state.cpActive){
     fetchCounterpick();
   } else {
@@ -263,10 +253,6 @@ function updateTimers(){
   document.getElementById('reserve-right').textContent=fmt(state.rightReserve);
 }
 
-// ============================================================
-// FETCH: запрос к бекенду
-// POV: мы играем за Hidden King (L), countering Archmother (R)
-// ============================================================
 async function fetchCounterpick(){
   const my_heroes   = state.slots.filter(s=>s.side==='L'&&s.type==='P'&&s.hero).map(s=>s.hero);
   const enemy_heroes= state.slots.filter(s=>s.side==='R'&&s.type==='P'&&s.hero).map(s=>s.hero);
@@ -304,9 +290,7 @@ async function fetchCounterpick(){
   render();
 }
 
-// ============================================================
 // RENDER FUNCTIONS
-// ============================================================
 function renderPhaseBar(){
   const lEl=document.getElementById('left-phases');
   const rEl=document.getElementById('right-phases');
@@ -372,7 +356,7 @@ function renderActionBanner(){
   }).join('');
 }
 
-// ---- HERO GRID с win_prob ----
+// HERO GRID with win_prob
 function renderHeroGrid(){
   const q=document.getElementById('search').value.toLowerCase();
   const used=usedHeroes();
@@ -390,7 +374,6 @@ function renderHeroGrid(){
       const pb = state.cpMap[b] ?? 0.5;
       const usedA = used.includes(a);
       const usedB = used.includes(b);
-      // использованные — в конец
       if(usedA && !usedB) return 1;
       if(!usedA && usedB) return -1;
       return pb - pa;
@@ -414,7 +397,7 @@ function renderHeroGrid(){
       :'<div class="used-mark" style="color:#2a4a20">✓</div>'):'';
 
 
-    // ---- WIN PROB BADGE ----
+    // WIN PROB BADGE
     let probBadge='';
     if(state.cpActive && !isUsed && !isBanned && state.cpMap[h] !== undefined){
       const prob = state.cpMap[h];
@@ -433,7 +416,7 @@ function renderHeroGrid(){
       ">${pct}%</div>`;
     }
 
-    // ---- WIN PROB BAR (внизу карточки) ----
+    // WIN PROB BAR 
     let probBar='';
     if(state.cpActive && !isUsed && !isBanned && state.cpMap[h] !== undefined){
       const prob = state.cpMap[h];
