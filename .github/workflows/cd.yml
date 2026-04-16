@@ -1,0 +1,75 @@
+name: Build releases
+on:
+  workflow_dispatch:
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install flask pandas scikit-learn pyinstaller numpy
+      - name: Build Linux binary
+        run: |
+          cd build
+          pyinstaller --onefile \
+            --add-data "frontend:frontend" \
+            --add-data "model/model.pkl:model" \
+            --add-data "config.json:." \
+            --hidden-import sklearn \
+            --hidden-import sklearn.ensemble \
+            --hidden-import sklearn.ensemble._gb \
+            --hidden-import sklearn.ensemble._forest \
+            --hidden-import sklearn.linear_model \
+            --hidden-import sklearn.preprocessing \
+            --hidden-import sklearn.tree \
+            --hidden-import sklearn.tree._classes \
+            server.py
+      - name: Package Linux
+        run: |
+          mkdir -p release-linux
+          cp build/dist/server release-linux/server
+          cp build/config.json release-linux/config.json
+          tar -czf deadlock-linux.tar.gz release-linux/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: deadlock-linux.tar.gz
+
+  build-windows:
+    runs-on: windows-2019
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install flask pandas scikit-learn pyinstaller numpy
+      - name: Build Windows exe
+        run: |
+          cd build
+          pyinstaller --onefile `
+            --add-data "frontend;frontend" `
+            --add-data "model/model.pkl;model" `
+            --add-data "config.json;." `
+            --hidden-import sklearn `
+            --hidden-import sklearn.ensemble `
+            --hidden-import sklearn.ensemble._gb `
+            --hidden-import sklearn.ensemble._forest `
+            --hidden-import sklearn.linear_model `
+            --hidden-import sklearn.preprocessing `
+            --hidden-import sklearn.tree `
+            --hidden-import sklearn.tree._classes `
+            server.py
+      - name: Package Windows
+        run: |
+          mkdir release-windows
+          copy build\dist\server.exe release-windows\server.exe
+          copy build\config.json release-windows\config.json
+          Compress-Archive -Path release-windows\* -DestinationPath deadlock-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: deadlock-windows.zip
